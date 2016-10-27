@@ -33,8 +33,9 @@ signal.signal(signal.SIGTERM, signal_handler)
 @click.argument('num_workers', default=1)
 @click.option('--burst/--stay-alive', '-b/ ', default=True)
 @click.option('--run-pre-checks/--skip-pre-checks', default=True)
+@click.option('--run-env-checks/--skip-env-checks', default=True)
 @click.option('--interval', '-n', default=60, help='update interval in seconds')
-def launch_workers(num_workers, burst, run_pre_checks, interval):
+def launch_workers(num_workers, burst, run_pre_checks, run_env_checks, interval):
     os.makedirs("logs", exist_ok=True)
 
     if run_pre_checks:
@@ -57,12 +58,16 @@ def launch_workers(num_workers, burst, run_pre_checks, interval):
     env_record_path = os.path.join(env_record_dir, "%s_%s" %(hostname, timestamp))
     env = save_env_record(env_record_path)
     orig_env_record = read_env_record(os.path.join(env_record_dir, 'env_record_start.yaml'))
-    if env != orig_env_record:
-        print("env_record of this machine does not match env record of original machine! " \
-            "Aborting launch workers! Please see %s to compare manually" % (env_record_path))
-        raise SystemExit("Env records do not match, aborting launch workers!")
-
-
+    if run_env_checks:
+        print("Running env-checks...")
+        if env != orig_env_record:
+            print("env_record of this machine does not match env record of original machine! " \
+                "Aborting launch workers! Please see %s to compare manually" % (env_record_path))
+            raise SystemExit("Env records do not match, aborting launch workers!")
+        else:
+            print("OK!")
+    else:
+        print("Skipping env-checks!")
 
     print("")
     print("Running on hostname %s" % hostname)
@@ -89,14 +94,14 @@ def launch_workers(num_workers, burst, run_pre_checks, interval):
         logname = 'logs/%s_%s_%s.log' % (hostname, timestamp, i)
         print("Launching worker #%s with log file %s" % (i, logname))
 
-        log = open(logname,'w')
+        log = open(logname, 'w')
         proc = subprocess.Popen(cmd, stdout=log, stderr=log)
 
         worker_processes.append(proc)
         log_files.append(log)
 
     print("")
-    print("Worker PIDS: %s" % [ w.pid for w in worker_processes ])
+    print("Worker PIDS: %s" % [w.pid for w in worker_processes])
 
     try:
         conn = sjs.get_redis_conn()
